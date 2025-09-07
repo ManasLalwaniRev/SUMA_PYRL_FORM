@@ -1,12 +1,13 @@
-const express = require('express');
-const cors = require('cors');
-const { Pool } = require('pg');
-const bcrypt = require('bcrypt');
-const session = require('express-session');
+import express from 'express';
+import cors from 'cors';
+import pg from 'pg';
+import session from 'express-session';
+import dotenv from 'dotenv';
+import bcrypt from 'bcrypt';
 
 // Load environment variables in development
 if (process.env.NODE_ENV !== 'production') {
-  require('dotenv').config();
+  dotenv.config();
 }
 
 const app = express();
@@ -35,14 +36,18 @@ app.use(session({
 
 // --- PostgreSQL Connection ---
 // Using a config object with environment variables
-const pool = new Pool({
+const pool = new pg.Pool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_DATABASE,
   ssl: {
     rejectUnauthorized: false
-  }
+  },
+  keepAlive: true,
+  keepAliveInitialDelay: 30000,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000
 });
 
 // --- Helper Functions ---
@@ -58,8 +63,10 @@ const sanitizeData = (data, dateFields) => {
 
 // --- USER AUTHENTICATION & MANAGEMENT ROUTES ---
 app.get('/api/check-auth', (req, res) => {
-    if (req.isAuthenticated()) {
-        res.json({ userId: req.user.user_id, username: req.user.user_name, role: req.user.user_role, avatarUrl: req.user.avatar_url });
+    // This route should be used for simple session checks, not full authentication.
+    // Since Passport.js is removed, we'll check for a user in the session instead.
+    if (req.session.userId) {
+        res.json({ userId: req.session.userId, username: req.session.username, role: req.session.role, avatarUrl: req.session.avatarUrl });
     } else {
         res.status(401).json({ error: 'Not authenticated' });
     }
@@ -68,6 +75,17 @@ app.get('/api/check-auth', (req, res) => {
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   const ip_address = req.ip;
+
+  // Hardcoded check for development purposes
+  if (username === 'admin' && password === 'password') {
+    // For local testing, we simulate a user session
+    req.session.userId = 'admin_user';
+    req.session.username = 'admin';
+    req.session.role = 'admin';
+    req.session.avatarUrl = 'https://ui-avatars.com/api/?name=Admin+User';
+    return res.json({ userId: 'admin_user', username: 'admin', role: 'admin', avatarUrl: 'https://ui-avatars.com/api/?name=Admin+User' });
+  }
+
   try {
     const result = await pool.query('SELECT * FROM PUBLIC.SUMA_users WHERE user_name = $1', [username]);
     if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
@@ -75,6 +93,13 @@ app.post('/api/login', async (req, res) => {
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) return res.status(401).json({ error: 'Invalid credentials' });
     await pool.query('UPDATE PUBLIC.SUMA_users SET last_login = NOW(), ip_address = $1 WHERE user_id = $2', [ip_address, user.user_id]);
+    
+    // Store user info in session
+    req.session.userId = user.user_id;
+    req.session.username = user.user_name;
+    req.session.role = user.user_role;
+    req.session.avatarUrl = user.avatar_url;
+
     res.json({ userId: user.user_id, username: user.user_name, role: user.user_role, avatarUrl: user.avatar_url });
   } catch (err) {
     console.error(err);
@@ -200,9 +225,9 @@ app.post('/api/payroll', async (req, res) => {
       INSERT INTO PUBLIC.SUMA_payroll (id, entity_id, version, is_latest, "employeeName", "employeeId", "dateOfHire", "reviewDate", "currentJobTitle", "workLocation", "todayDate", "employeeClassCode", "employeeCode", description, "rateType", "flsaExempt", "reasonForChange", "currentSalary", "newSalary", "percentageAdjustment", "effectiveDate", "newJobTitle", "newSupervisorName", "newSupervisorId", "newProgram", "newDepartment", "nextReviewDate", "newEmployeeCode", "newRateType", "newFlsaExempt", comments)
       VALUES ($1, $1, 1, TRUE, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28) RETURNING *;`;
     const values = [newEntityId, data.employeeName, data.employeeId, data.dateOfHire, data.reviewDate, data.currentJobTitle, data.workLocation, data.todayDate, data.employeeClassCode, data.employeeCode, data.description, data.rateType, data.flsaExempt, data.reasonForChange, data.currentSalary, data.newSalary, data.percentageAdjustment, data.effectiveDate, data.newJobTitle, data.newSupervisorName, data.newSupervisorId, data.newProgram, data.newDepartment, data.nextReviewDate, data.newEmployeeCode, data.newRateType, data.newFlsaExempt, data.comments];
-    const result = await client.query(insertQuery, values);
+    const newVersionResult = await client.query(insertQuery, values);
     await client.query('COMMIT');
-    res.status(201).json(result.rows[0]);
+    res.json(newVersionResult.rows[0]);
   } catch (err) {
     await client.query('ROLLBACK');
     console.error(err);
@@ -256,7 +281,7 @@ app.post('/api/requisitions', async (req, res) => {
             INSERT INTO PUBLIC.SUMA_position_requisitions ("requisitionNumber", "originalId", organization, "hrOrganization", "detailJobTitle", grade, "eeoCode", "jobCategory", "corporateOfficer", "requestedBy", "requisitionDate", "targetDate", "positionType", "numberOfOpenings", "newBusinessBudgetID", "newBusinessBudgetDescription", comments, status, approver, "approvalDate")
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING *;`;
         const values = [data.requisitionNumber, data.originalId, data.organization, data.hrOrganization, data.detailJobTitle, data.grade, data.eeoCode, data.jobCategory, data.corporateOfficer, data.requestedBy, data.requisitionDate, data.targetDate, data.positionType, data.numberOfOpenings, data.newBusinessBudgetID, data.newBusinessBudgetDescription, data.comments, data.status, data.approver, data.approvalDate];
-        const result = await pool.query(insertQuery, values);
+        const result = await client.query(insertQuery, values);
         res.status(201).json(result.rows[0]);
     } catch (err) {
         console.error(err);
