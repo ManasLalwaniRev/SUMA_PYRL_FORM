@@ -64,8 +64,6 @@ const sanitizeData = (data, dateFields) => {
 
 // --- USER AUTHENTICATION & MANAGEMENT ROUTES ---
 app.get('/api/check-auth', (req, res) => {
-    // This route should be used for simple session checks, not full authentication.
-    // Since Passport.js is removed, we'll check for a user in the session instead.
     if (req.session.userId) {
         res.json({ userId: req.session.userId, username: req.session.username, role: req.session.role, avatarUrl: req.session.avatarUrl });
     } else {
@@ -79,7 +77,6 @@ app.post('/api/login', async (req, res) => {
 
   // Hardcoded check for development purposes
   if (username === 'admin' && password === 'password') {
-    // For local testing, we simulate a user session
     req.session.userId = 'admin_user';
     req.session.username = 'admin';
     req.session.role = 'admin';
@@ -228,7 +225,7 @@ app.post('/api/payroll', async (req, res) => {
     const values = [newEntityId, data.employeeName, data.employeeId, data.dateOfHire, data.reviewDate, data.currentJobTitle, data.workLocation, data.todayDate, data.employeeClassCode, data.employeeCode, data.description, data.rateType, data.flsaExempt, data.reasonForChange, data.currentSalary, data.newSalary, data.percentageAdjustment, data.effectiveDate, data.newJobTitle, data.newSupervisorName, data.newSupervisorId, data.newProgram, data.newDepartment, data.nextReviewDate, data.newEmployeeCode, data.newRateType, data.newFlsaExempt, data.comments];
     const newVersionResult = await client.query(insertQuery, values);
     await client.query('COMMIT');
-    res.json(newVersionResult.rows[0]);
+    res.status(201).json(newVersionResult.rows[0]);
   } catch (err) {
     await client.query('ROLLBACK');
     console.error(err);
@@ -251,7 +248,7 @@ app.put('/api/payroll/:entity_id', async (req, res) => {
     const insertQuery = `
       INSERT INTO PUBLIC.SUMA_payroll (entity_id, version, is_latest, "employeeName", "employeeId", "dateOfHire", "reviewDate", "currentJobTitle", "workLocation", "todayDate", "employeeClassCode", "employeeCode", description, "rateType", "flsaExempt", "reasonForChange", "currentSalary", "newSalary", "percentageAdjustment", "effectiveDate", "newJobTitle", "newSupervisorName", "newSupervisorId", "newProgram", "newDepartment", "nextReviewDate", "newEmployeeCode", "newRateType", "newFlsaExempt", comments)
       VALUES ($1, $2, TRUE, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29) RETURNING *;`;
-    const values = [entity_id, currentVersion + 1, data.employeeName, data.employeeId, data.dateOfHire, data.reviewDate, data.currentJobTitle, data.workLocation, data.todayDate, data.employeeClassCode, data.employeeCode, data.description, data.rateType, data.flsaExempt, data.reasonForChange, data.currentSalary, data.newSalary, data.percentageAdjustment, data.effectiveDate, data.newJobTitle, data.newSupervisorName, data.newSupervisorId, data.newProgram, data.newDepartment, data.nextReviewDate, data.newEmployeeCode, data.newRateType, data.newFlsaExempt, data.comments];
+    const values = [entity_id, currentVersion + 1, data.employeeName, data.employeeId, data.dateOfHire, data.reviewDate, data.currentJobTitle, data.workLocation, data.todayDate, data.employeeClassCode, data.employeeCode, data.description, data.rateType, data.rateType, data.flsaExempt, data.reasonForChange, data.currentSalary, data.newSalary, data.percentageAdjustment, data.effectiveDate, data.newJobTitle, data.newSupervisorName, data.newSupervisorId, data.newProgram, data.newDepartment, data.nextReviewDate, data.newEmployeeCode, data.newRateType, data.newFlsaExempt, data.comments];
     const newVersionResult = await client.query(insertQuery, values);
     await client.query('COMMIT');
     res.json(newVersionResult.rows[0]);
@@ -266,13 +263,13 @@ app.put('/api/payroll/:entity_id', async (req, res) => {
 
 // --- Position Requisition API Routes ---
 app.get('/api/requisitions', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM PUBLIC.SUMA_position_requisitions ORDER BY created_at DESC');
-        res.json(result.rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Internal server error' });
-    }
+  try {
+    const result = await pool.query('SELECT * FROM PUBLIC.SUMA_position_requisitions ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 app.post('/api/requisitions', async (req, res) => {
@@ -282,7 +279,7 @@ app.post('/api/requisitions', async (req, res) => {
             INSERT INTO PUBLIC.SUMA_position_requisitions ("requisitionNumber", "originalId", organization, "hrOrganization", "detailJobTitle", grade, "eeoCode", "jobCategory", "corporateOfficer", "requestedBy", "requisitionDate", "targetDate", "positionType", "numberOfOpenings", "newBusinessBudgetID", "newBusinessBudgetDescription", comments, status, approver, "approvalDate")
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING *;`;
         const values = [data.requisitionNumber, data.originalId, data.organization, data.hrOrganization, data.detailJobTitle, data.grade, data.eeoCode, data.jobCategory, data.corporateOfficer, data.requestedBy, data.requisitionDate, data.targetDate, data.positionType, data.numberOfOpenings, data.newBusinessBudgetID, data.newBusinessBudgetDescription, data.comments, data.status, data.approver, data.approvalDate];
-        const result = await client.query(insertQuery, values);
+        const result = await pool.query(insertQuery, values);
         res.status(201).json(result.rows[0]);
     } catch (err) {
         console.error(err);
