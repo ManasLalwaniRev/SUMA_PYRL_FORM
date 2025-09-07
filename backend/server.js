@@ -72,37 +72,12 @@ app.get('/api/check-auth', (req, res) => {
 });
 
 app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
-  
-  // Hardcoded check for development and deployment purposes
-  if (username === 'admin' && password === 'password') {
-    req.session.userId = 'admin_user';
-    req.session.username = 'admin';
-    req.session.role = 'admin';
-    req.session.avatarUrl = 'https://ui-avatars.com/api/?name=Admin+User';
-    return res.json({ userId: 'admin_user', username: 'admin', role: 'admin', avatarUrl: 'https://ui-avatars.com/api/?name=Admin+User' });
-  }
-  
-  const ip_address = req.ip;
-  try {
-    const result = await pool.query('SELECT * FROM PUBLIC.SUMA_users WHERE user_name = $1', [username]);
-    if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
-    const user = result.rows[0];
-    const passwordMatch = await bcrypt.compare(password, user.password);
-    if (!passwordMatch) return res.status(401).json({ error: 'Invalid credentials' });
-    await pool.query('UPDATE PUBLIC.SUMA_users SET last_login = NOW(), ip_address = $1 WHERE user_id = $2', [ip_address, user.user_id]);
-    
-    // Store user info in session
-    req.session.userId = user.user_id;
-    req.session.username = user.user_name;
-    req.session.role = user.user_role;
-    req.session.avatarUrl = user.avatar_url;
-
-    res.json({ userId: user.user_id, username: user.user_name, role: user.user_role, avatarUrl: user.avatar_url });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+    // Skip all authentication and directly log in for development/testing.
+    req.session.userId = 'test_user';
+    req.session.username = 'testuser';
+    req.session.role = 'user';
+    req.session.avatarUrl = 'https://ui-avatars.com/api/?name=Test+User';
+    return res.json({ userId: 'test_user', username: 'testuser', role: 'user', avatarUrl: 'https://ui-avatars.com/api/?name=Test+User' });
 });
 
 app.get('/api/users', async (req, res) => {
