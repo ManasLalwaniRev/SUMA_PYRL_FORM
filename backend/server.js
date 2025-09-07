@@ -73,9 +73,8 @@ app.get('/api/check-auth', (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
-  const ip_address = req.ip;
-
-  // Hardcoded check for development purposes
+  
+  // Hardcoded check for development and deployment purposes
   if (username === 'admin' && password === 'password') {
     req.session.userId = 'admin_user';
     req.session.username = 'admin';
@@ -83,7 +82,8 @@ app.post('/api/login', async (req, res) => {
     req.session.avatarUrl = 'https://ui-avatars.com/api/?name=Admin+User';
     return res.json({ userId: 'admin_user', username: 'admin', role: 'admin', avatarUrl: 'https://ui-avatars.com/api/?name=Admin+User' });
   }
-
+  
+  const ip_address = req.ip;
   try {
     const result = await pool.query('SELECT * FROM PUBLIC.SUMA_users WHERE user_name = $1', [username]);
     if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
