@@ -366,16 +366,18 @@ import { HomeIcon, FileTextIcon } from './components/Icons';
 
 // Dynamically set the API URL based on the environment
 const API_URL = import.meta.env.PROD
-  ? 'https://suma-pyrl-form.vercel.app/api' // Vercel URL
-  : 'http://localhost:5001/api'; // Localhost URL
+  ? 'https://suma-pyrl-form.vercel.app' // Vercel URL
+  : 'http://localhost:5001'; // Localhost URL
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('login');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
   const handleLogin = async (username, password) => {
+    setLoginError(''); // Clear any previous errors
     try {
-      const response = await fetch(`${API_URL}/login`, {
+      const response = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -388,10 +390,11 @@ export default function App() {
         setIsLoggedIn(true);
         setCurrentPage('home');
       } else {
+        setLoginError('Login failed. Please check your credentials.');
         console.error('Login failed');
-        // Handle login failure, show a message to the user
       }
     } catch (error) {
+      setLoginError('Network error. Please try again.');
       console.error('Network error:', error);
     }
   };
@@ -403,7 +406,7 @@ export default function App() {
 
   const renderPage = () => {
     if (!isLoggedIn) {
-      return <LoginPage onLogin={handleLogin} />;
+      return <LoginPage onLogin={handleLogin} loginError={loginError} />;
     }
 
     switch (currentPage) {
